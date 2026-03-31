@@ -38,6 +38,8 @@ public class User {
     private Role role;
 
     private boolean verified;
+    
+    private boolean profileCompleted;
 
     private LocalDateTime createdAt;
 

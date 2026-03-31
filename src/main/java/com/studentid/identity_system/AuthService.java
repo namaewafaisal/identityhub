@@ -28,6 +28,7 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.getPassword())); // IMPORTANT
         user.setRole(Role.STUDENT);
         user.setVerified(false);
+        user.setProfileCompleted(false);
 
         // 3. Save
         userRepository.save(user);

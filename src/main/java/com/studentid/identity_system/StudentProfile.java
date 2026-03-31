@@ -15,7 +15,7 @@ public class StudentProfile {
 
     private String fullName;
     private String department;
-    private int year;
+    private Integer year;
 
     @OneToOne
     @JoinColumn(name = "user_id", nullable = false)
