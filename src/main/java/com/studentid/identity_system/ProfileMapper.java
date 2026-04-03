@@ -6,9 +6,17 @@ import org.springframework.stereotype.Component;
 @Mapper(componentModel = "spring")
 public interface ProfileMapper {
 
+   @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "handle", ignore = true)  // ← never touch handle here
+    void updateProfileFromDto(UpdateProfileRequest dto, @MappingTarget StudentProfile entity);
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    void updateProfileFromDto(UpdateProfileRequest dto,
-                              @MappingTarget StudentProfile entity);
+    void updateHandleFromDto(HandleRequest dto,
+                            @MappingTarget StudentHandle entity);
 
     ProfileResponse toResponse(StudentProfile profile);
+
+    HandleResponse toHandleResponse(StudentHandle handle);
+    StudentHandle toHandleEntity(HandleRequest request);
+    StudentProfile toEntity(ProfileRequest request);
+
 }
