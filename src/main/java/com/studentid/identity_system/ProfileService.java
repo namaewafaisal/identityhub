@@ -11,6 +11,12 @@ import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+
 @Service
 @RequiredArgsConstructor
 public class ProfileService {   
@@ -116,5 +122,50 @@ public class ProfileService {
         Page<StudentProfile> page = profileRepository.findAll(spec,pageable);
 
         return page.map(mapper::toResponse);
+    }
+    public ByteArrayInputStream exportToExcel() {
+
+        List<StudentProfile> profiles = profileRepository.findAll();
+
+        try (Workbook workbook = new XSSFWorkbook();
+            ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            Sheet sheet = workbook.createSheet("Profiles");
+
+            // Header
+            Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("Register Number");
+            header.createCell(1).setCellValue("Full Name");
+            header.createCell(2).setCellValue("Department");
+            header.createCell(3).setCellValue("Year");
+            header.createCell(4).setCellValue("Batch");
+            header.createCell(5).setCellValue("GitHub");
+            header.createCell(6).setCellValue("LeetCode");
+
+            int rowIdx = 1;
+
+            for (StudentProfile profile : profiles) {
+
+                Row row = sheet.createRow(rowIdx++);
+
+                row.createCell(0).setCellValue(profile.getRegisterNumber());
+                row.createCell(1).setCellValue(profile.getFullName());
+                row.createCell(2).setCellValue(profile.getDepartment());
+                row.createCell(3).setCellValue(profile.getYear());
+                row.createCell(4).setCellValue(profile.getBatch());
+
+                // handle (important)
+                if (profile.getHandle() != null) {
+                    row.createCell(5).setCellValue(profile.getHandle().getGithub());
+                    row.createCell(6).setCellValue(profile.getHandle().getLeetcode());
+                }
+            }
+
+            workbook.write(out);
+            return new ByteArrayInputStream(out.toByteArray());
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to export Excel");
+        }
     }
 }

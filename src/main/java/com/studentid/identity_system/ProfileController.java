@@ -1,7 +1,11 @@
 package com.studentid.identity_system;
 
+import java.io.ByteArrayInputStream;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -59,5 +63,19 @@ public class ProfileController {
             Pageable pageable
     ) {
         return profileService.filter(department, year,name,pageable);
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> export() {
+
+        ByteArrayInputStream excel = profileService.exportToExcel();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("Content-Disposition", "attachment; filename=profiles.xlsx");
+
+        return ResponseEntity
+                .ok()
+                .headers(headers)
+                .body(excel.readAllBytes());
     }
 }
