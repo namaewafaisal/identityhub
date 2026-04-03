@@ -1,21 +1,28 @@
 package com.studentid.identity_system;
 
+import java.io.ByteArrayOutputStream;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 
+import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-
-import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +32,34 @@ public class ProfileService {
     private final UserRepository userRepository;
     private final ProfileMapper mapper;
 
+    @Value("${app.pagination.max-size}")
+    private int maxSize;
+
+    private final Map<String, Function<StudentProfile, Object>> fieldExtractors = Map.of(
+        "registerNumber", StudentProfile::getRegisterNumber,
+        "fullName", StudentProfile::getFullName,
+        "department", StudentProfile::getDepartment,
+        "year", StudentProfile::getYear,
+        "batch",StudentProfile::getBatch,
+        "section", StudentProfile::getSection,
+
+        // nested fields
+        "github", p -> p.getHandle() != null ? p.getHandle().getGithub() : "",
+        "leetcode", p -> p.getHandle() != null ? p.getHandle().getLeetcode() : "",
+        "hackerrank", p -> p.getHandle() != null ? p.getHandle().getLeetcode() : "",
+        "linkdin", p -> p.getHandle() != null ? p.getHandle().getLinkdin() : ""
+    );
+
+    private final Map<String, String> fieldHeaders = Map.of(
+        "registerNumber", "Register Number",
+        "fullName", "Full Name",
+        "department", "Department",
+        "year", "Year",
+        "batch", "Batch",
+        "section", "Section",
+        "github", "GitHub",
+        "leetcode", "LeetCode"
+    );
     @Transactional
     public void createProfile(ProfileRequest request, String userId) {
 
@@ -119,50 +154,99 @@ public class ProfileService {
             spec = spec.and(ProfileSpecifications.nameContains(name));
         }
 
+        
+
+        pageable = PageRequest.of(
+            pageable.getPageNumber(),
+            pageable.getPageSize() > maxSize ? maxSize : pageable.getPageSize(),
+            pageable.getSort().isUnsorted() ? Sort.by("registerNumber").ascending() : pageable.getSort()
+        );
+
         Page<StudentProfile> page = profileRepository.findAll(spec,pageable);
 
         return page.map(mapper::toResponse);
     }
-    public ByteArrayInputStream exportToExcel() {
+    public byte[] export(ExportRequest request) {
 
-        List<StudentProfile> profiles = profileRepository.findAll();
+        List<String> fields = request.getFields();
+
+        for (String field : fields) {
+            if (!fieldExtractors.containsKey(field)) {
+                throw new RuntimeException("Invalid field: " + field);
+            }
+        }
+
+        // 1. Mandatory validation
+        if (request.getDepartment() == null || request.getDepartment().isBlank()) {
+            throw new RuntimeException("Department is required");
+        }
+
+        if (request.getYear() == null) {
+            throw new RuntimeException("Year is required");
+        }
+
+        // 2. Base filter (MANDATORY)
+        Specification<StudentProfile> spec =
+                ProfileSpecifications.hasDepartment(request.getDepartment())
+                .and(ProfileSpecifications.hasYear(request.getYear()));
+
+        // 3. Optional filter
+        if (request.getSection() != null && !request.getSection().isBlank()) {
+            spec = spec.and(ProfileSpecifications.hasSection(request.getSection()));
+        }
+
+        List<StudentProfile> profiles = 
+            profileRepository.findAll(spec, Sort.by("registerNumber").ascending());
+        if (profiles.isEmpty()) {
+            throw new RuntimeException("No students found for given filters");
+        }
 
         try (Workbook workbook = new XSSFWorkbook();
-            ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
             Sheet sheet = workbook.createSheet("Profiles");
-
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font font = workbook.createFont();
+            font.setBold(true);
+            headerStyle.setFont(font);
             // Header
             Row header = sheet.createRow(0);
-            header.createCell(0).setCellValue("Register Number");
-            header.createCell(1).setCellValue("Full Name");
-            header.createCell(2).setCellValue("Department");
-            header.createCell(3).setCellValue("Year");
-            header.createCell(4).setCellValue("Batch");
-            header.createCell(5).setCellValue("GitHub");
-            header.createCell(6).setCellValue("LeetCode");
+            for (int i = 0; i < fields.size(); i++) {
+                String field = fields.get(i);
+                String headerName = fieldHeaders.getOrDefault(field, field);
 
-            int rowIdx = 1;
+                Cell cell = header.createCell(i);
+                cell.setCellValue(headerName);
+                cell.setCellStyle(headerStyle);
+            }
+
+            int rowNum = 1;
 
             for (StudentProfile profile : profiles) {
 
-                Row row = sheet.createRow(rowIdx++);
+                Row row = sheet.createRow(rowNum++);
 
-                row.createCell(0).setCellValue(profile.getRegisterNumber());
-                row.createCell(1).setCellValue(profile.getFullName());
-                row.createCell(2).setCellValue(profile.getDepartment());
-                row.createCell(3).setCellValue(profile.getYear());
-                row.createCell(4).setCellValue(profile.getBatch());
+                for (int i = 0; i < fields.size(); i++) {
 
-                // handle (important)
-                if (profile.getHandle() != null) {
-                    row.createCell(5).setCellValue(profile.getHandle().getGithub());
-                    row.createCell(6).setCellValue(profile.getHandle().getLeetcode());
+                    String field = fields.get(i);
+
+                    Function<StudentProfile, Object> extractor = fieldExtractors.get(field);
+
+                    Object value = extractor.apply(profile);
+
+                    row.createCell(i).setCellValue(
+                            value != null ? value.toString() : ""
+                    );
                 }
+            }
+            for (int i = 0; i < fields.size(); i++) {
+                sheet.autoSizeColumn(i);
             }
 
             workbook.write(out);
-            return new ByteArrayInputStream(out.toByteArray());
+            workbook.close();
+
+            return out.toByteArray();
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to export Excel");

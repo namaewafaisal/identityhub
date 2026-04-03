@@ -20,4 +20,8 @@ public class ProfileSpecifications {
                     "%" + name.toLowerCase() + "%"
                 );
     }
+    public static Specification<StudentProfile> hasSection(String section) {
+        return (root, query, cb) ->
+                cb.equal(root.get("section"), section);
+    }
 }

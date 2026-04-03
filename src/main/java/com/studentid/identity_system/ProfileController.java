@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -60,15 +61,15 @@ public class ProfileController {
             @RequestParam(required = false) String department,
             @RequestParam(required = false) Integer year,
             @RequestParam(required = false) String name,
-            Pageable pageable
+            @PageableDefault(page = 0, size = 20) Pageable pageable
     ) {
         return profileService.filter(department, year,name,pageable);
     }
 
-    @GetMapping("/export")
-    public ResponseEntity<byte[]> export() {
+    @PostMapping("/export")
+    public ResponseEntity<byte[]> export(@RequestBody ExportRequest request) {
 
-        ByteArrayInputStream excel = profileService.exportToExcel();
+        byte[] excel = profileService.export(request);
 
         HttpHeaders headers = new HttpHeaders();
         headers.add("Content-Disposition", "attachment; filename=profiles.xlsx");
@@ -76,6 +77,6 @@ public class ProfileController {
         return ResponseEntity
                 .ok()
                 .headers(headers)
-                .body(excel.readAllBytes());
+                .body(excel);
     }
 }
