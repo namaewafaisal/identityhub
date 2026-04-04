@@ -1,4 +1,4 @@
-package com.studentid.identity_system;
+package com.studentid.identity_system.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

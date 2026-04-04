@@ -24,7 +24,7 @@ public class StudentHandle {
     private String leetcode;
     private String codeforces;
     private String hackerrank;
-    private String linkdin;
+    private String linkedin;
 
     @OneToOne
     @JoinColumn(name = "profile_id")

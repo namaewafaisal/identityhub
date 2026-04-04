@@ -17,8 +17,14 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())   // disable CSRF for now
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .anyRequest().authenticated()// allow all requests
+                .requestMatchers(
+                    "/api/auth/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/v3/api-docs/**",
+                    "/webjars/**"
+                ).permitAll()
+                .anyRequest().authenticated()// allow all requests
                 )
                 .addFilterBefore(jwtFilter,
                     org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter.class)

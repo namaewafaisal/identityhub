@@ -3,6 +3,12 @@ package com.studentid.identity_system;
 import org.mapstruct.*;
 import org.springframework.stereotype.Component;
 
+import com.studentid.identity_system.dto.HandleRequest;
+import com.studentid.identity_system.dto.HandleResponse;
+import com.studentid.identity_system.dto.ProfileRequest;
+import com.studentid.identity_system.dto.ProfileResponse;
+import com.studentid.identity_system.dto.UpdateProfileRequest;
+
 @Mapper(componentModel = "spring")
 public interface ProfileMapper {
 

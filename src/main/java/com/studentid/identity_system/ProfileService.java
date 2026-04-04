@@ -1,6 +1,8 @@
 package com.studentid.identity_system;
 
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -21,6 +23,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import com.studentid.identity_system.dto.ExportRequest;
+import com.studentid.identity_system.dto.ProfileRequest;
+import com.studentid.identity_system.dto.ProfileResponse;
+import com.studentid.identity_system.dto.UpdateProfileRequest;
+
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 
@@ -35,43 +42,53 @@ public class ProfileService {
     @Value("${app.pagination.max-size}")
     private int maxSize;
 
-    private final Map<String, Function<StudentProfile, Object>> fieldExtractors = Map.of(
-        "registerNumber", StudentProfile::getRegisterNumber,
-        "fullName", StudentProfile::getFullName,
-        "department", StudentProfile::getDepartment,
-        "year", StudentProfile::getYear,
-        "batch",StudentProfile::getBatch,
-        "section", StudentProfile::getSection,
+    private final Map<ProfileField, Function<StudentProfile, Object>> fieldExtractors =
+            createFieldExtractors();
 
-        // nested fields
-        "github", p -> p.getHandle() != null ? p.getHandle().getGithub() : "",
-        "leetcode", p -> p.getHandle() != null ? p.getHandle().getLeetcode() : "",
-        "hackerrank", p -> p.getHandle() != null ? p.getHandle().getLeetcode() : "",
-        "linkdin", p -> p.getHandle() != null ? p.getHandle().getLinkdin() : ""
-    );
+    private Map<ProfileField, Function<StudentProfile, Object>> createFieldExtractors() {
+        Map<ProfileField, Function<StudentProfile, Object>> map = new LinkedHashMap<>();
 
-    private final Map<String, String> fieldHeaders = Map.of(
-        "registerNumber", "Register Number",
-        "fullName", "Full Name",
-        "department", "Department",
-        "year", "Year",
-        "batch", "Batch",
-        "section", "Section",
-        "github", "GitHub",
-        "leetcode", "LeetCode"
+        map.put(ProfileField.REGISTER_NUMBER, StudentProfile::getRegisterNumber);
+        map.put(ProfileField.FULL_NAME, StudentProfile::getFullName);
+        map.put(ProfileField.DEPARTMENT, StudentProfile::getDepartment);
+        map.put(ProfileField.YEAR, StudentProfile::getYear);
+        map.put(ProfileField.SECTION, StudentProfile::getSection);
+        map.put(ProfileField.BATCH, StudentProfile::getBatch);
+
+        map.put(ProfileField.GITHUB, p -> p.getHandle() != null ? p.getHandle().getGithub() : "");
+        map.put(ProfileField.LEETCODE, p -> p.getHandle() != null ? p.getHandle().getLeetcode() : "");
+        map.put(ProfileField.LINKEDIN, p -> p.getHandle() != null ? p.getHandle().getLinkedin() : "");
+        map.put(ProfileField.HACKERRANK, p -> p.getHandle() != null ? p.getHandle().getHackerrank() : "");
+        map.put(ProfileField.CODE_FORCES, p -> p.getHandle() != null ? p.getHandle().getCodeforces() : "");
+
+        return map;
+    }
+
+    private final Map<ProfileField, String> fieldHeaders = Map.ofEntries(
+        Map.entry(ProfileField.REGISTER_NUMBER, "Register Number"),
+        Map.entry(ProfileField.FULL_NAME, "Full Name"),
+        Map.entry(ProfileField.DEPARTMENT, "Department"),
+        Map.entry(ProfileField.YEAR, "Year"),
+        Map.entry(ProfileField.BATCH, "Batch"),
+        Map.entry(ProfileField.SECTION, "Section"),
+        Map.entry(ProfileField.GITHUB, "GitHub"),
+        Map.entry(ProfileField.LEETCODE, "LeetCode"),
+        Map.entry(ProfileField.HACKERRANK, "Hackerrank"),
+        Map.entry(ProfileField.CODE_FORCES, "Code Forces"),
+        Map.entry(ProfileField.LINKEDIN, "Linkedin")
     );
     @Transactional
     public void createProfile(ProfileRequest request, String userId) {
 
         User user = userRepository.findById(UUID.fromString(userId))
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not Found"));
 
         // check if profile already exists
         if (profileRepository.findByUserId(user.getId()).isPresent()) {
-            throw new RuntimeException("Profile already exists");
+            throw new ResourceAlreadyExistsException("Profile already exists");
         }
         if (profileRepository.existsByRegisterNumber(request.getRegisterNumber())) {
-        throw new RuntimeException("Register number already exists");
+            throw new ResourceAlreadyExistsException("Register Number already exists");
     }
 
         StudentProfile profile = mapper.toEntity(request);
@@ -91,8 +108,7 @@ public class ProfileService {
     public ProfileResponse getProfile(String userId) {
         StudentProfile profile = profileRepository
                 .findByUserId(UUID.fromString(userId))
-                .orElseThrow(() -> new RuntimeException("Profile not found"));
-
+                .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
         return mapper.toResponse(profile);
     }
     @Transactional
@@ -100,7 +116,7 @@ public class ProfileService {
 
         StudentProfile profile = profileRepository
                 .findByUserId(UUID.fromString(userId))
-                .orElseThrow(() -> new RuntimeException("Profile not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
 
         mapper.updateProfileFromDto(request, profile);
         if (request.getHandle() != null) {
@@ -125,21 +141,11 @@ public class ProfileService {
 
         StudentProfile profile = profileRepository
                 .findByRegisterNumber(registerNumber)
-                .orElseThrow(() -> new RuntimeException("Student not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Profile not found"));
 
         return mapper.toResponse(profile);
     }
-
-    public List<ProfileResponse> filterByDepartmentAndYear(String department, Integer year) {
-
-        List<StudentProfile> profiles =
-                profileRepository.findByDepartmentAndYear(department, year);
-
-        return profiles.stream()
-                .map(mapper::toResponse)
-                .toList();
-    }
-
+    
     public Page<ProfileResponse> filter(String department, Integer year,String name, Pageable pageable) {
 
         Specification<StudentProfile> spec = (root, query, cb) -> null;     
@@ -166,23 +172,16 @@ public class ProfileService {
 
         return page.map(mapper::toResponse);
     }
+    
     public byte[] export(ExportRequest request) {
 
-        List<String> fields = request.getFields();
+        List<ProfileField> fields = request.getFields();
 
-        for (String field : fields) {
-            if (!fieldExtractors.containsKey(field)) {
-                throw new RuntimeException("Invalid field: " + field);
-            }
-        }
-
-        // 1. Mandatory validation
-        if (request.getDepartment() == null || request.getDepartment().isBlank()) {
-            throw new RuntimeException("Department is required");
-        }
-
-        if (request.getYear() == null) {
-            throw new RuntimeException("Year is required");
+        if (fields == null) {
+            // ALL fields
+            fields = new ArrayList<>(fieldExtractors.keySet());
+        } else if (fields.isEmpty()) {
+            throw new BadRequestException("Fields cannot be empty");
         }
 
         // 2. Base filter (MANDATORY)
@@ -198,7 +197,7 @@ public class ProfileService {
         List<StudentProfile> profiles = 
             profileRepository.findAll(spec, Sort.by("registerNumber").ascending());
         if (profiles.isEmpty()) {
-            throw new RuntimeException("No students found for given filters");
+            throw new ResourceNotFoundException("No students found for given filters");
         }
 
         try (Workbook workbook = new XSSFWorkbook();
@@ -212,8 +211,8 @@ public class ProfileService {
             // Header
             Row header = sheet.createRow(0);
             for (int i = 0; i < fields.size(); i++) {
-                String field = fields.get(i);
-                String headerName = fieldHeaders.getOrDefault(field, field);
+                ProfileField field = fields.get(i);
+                String headerName = fieldHeaders.getOrDefault(field, field.name());
 
                 Cell cell = header.createCell(i);
                 cell.setCellValue(headerName);
@@ -228,7 +227,7 @@ public class ProfileService {
 
                 for (int i = 0; i < fields.size(); i++) {
 
-                    String field = fields.get(i);
+                    ProfileField field = fields.get(i);
 
                     Function<StudentProfile, Object> extractor = fieldExtractors.get(field);
 

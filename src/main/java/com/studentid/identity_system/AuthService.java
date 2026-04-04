@@ -3,6 +3,9 @@ package com.studentid.identity_system;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.studentid.identity_system.dto.AuthRequest;
+import com.studentid.identity_system.dto.AuthResponse;
+
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -19,7 +22,7 @@ public class AuthService {
 
         // 1. Check if email already exists
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new RuntimeException("Email already registered");
+            throw new ResourceAlreadyExistsException("Email already registered");
         }
 
         // 2. Create user
@@ -36,7 +39,7 @@ public class AuthService {
 
     private void validateCollegeEmail(String email) {
         if (!email.endsWith("@trp.srmtrichy.edu.in")) {
-            throw new RuntimeException("Only college email addresses are allowed");
+            throw new BadRequestException("Only college email addresses are allowed");
         }
 
     }
@@ -45,11 +48,11 @@ public class AuthService {
 
         // 1. Find user
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+                .orElseThrow(() -> new BadRequestException("Invalid credentials"));
 
         // 2. Check password
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid credentials");
+            throw new BadRequestException("Invalid credentials");
         }
 
         // 3. Generate token (we'll implement next)

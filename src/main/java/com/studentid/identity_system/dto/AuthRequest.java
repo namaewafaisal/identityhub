@@ -1,4 +1,4 @@
-package com.studentid.identity_system;
+package com.studentid.identity_system.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
